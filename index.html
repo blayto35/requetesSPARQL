@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recherche d’entités chimiques dans ChEBI</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main>
+        <h1>Rechercher dans ChEBI</h1>
+        <h2>Saisissez le nom d’une entité chimique ou son identifiant ChEBI.</h2>
+        <form id="search-form">
+            <label for="requete">Nom de l’entité chimique ou identifiant ChEBI</label>
+            <div class="search-field">
+                <input id="requete" name="requete" type="search" placeholder="Ex. : water ou CHEBI:15377" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="molecule-suggestions" aria-expanded="false">
+                <div id="molecule-suggestions" class="suggestion-list" role="listbox" aria-label="Suggestions de recherche" hidden></div>
+            </div>
+            <button type="submit">Rechercher</button>
+        </form>
+        <section id="results" class="results" aria-live="polite" aria-busy="false"></section>
+    </main>
+    <script type="module" src="/main.ts"></script>
+</body>
+</html>
