@@ -1,43 +1,53 @@
 import axios from "axios";
 
+// Décrit une valeur reçue depuis le serveur SPARQL.
 interface Binding {
 	type: string;
 	value: string;
 }
 
+// Décrit une ligne de résultat avec une molécule et son nom.
 interface SparqlRow {
 	entity: Binding;
 	label: Binding;
 }
 
+// Décrit la réponse complète du serveur SPARQL.
 interface SparqlResponse {
 	results: {
 		bindings: SparqlRow[];
 	};
 }
 
+// Décrit les informations utilisées pour afficher une molécule.
 interface MoleculeResult {
 	label: string;
 	id: string;
 }
 
+// Adresse du serveur qui reçoit les requêtes de recherche.
 const endpoint = "http://localhost:7020";
+// Récupère les éléments du formulaire dans la page.
 const form = document.querySelector<HTMLFormElement>("#search-form");
 const input = document.querySelector<HTMLInputElement>("#requete");
 const suggestions = document.querySelector<HTMLDivElement>("#molecule-suggestions");
 const resultsContainer = document.querySelector<HTMLElement>("#results");
 
+// Arrête le programme si un élément nécessaire manque dans la page.
 if (!form || !input || !suggestions || !resultsContainer) {
 	throw new Error("Le formulaire de recherche est introuvable.");
 }
 
+// Garde des noms simples pour utiliser les éléments de la page.
 const resultPanel: HTMLElement = resultsContainer;
 const searchInput: HTMLInputElement = input;
 const suggestionList: HTMLDivElement = suggestions;
+// Ces valeurs servent à gérer les suggestions affichées pendant la saisie.
 let suggestionTimer: ReturnType<typeof setTimeout> | undefined;
 let suggestionRequestId = 0;
 let activeSuggestionIndex = -1;
 
+// Protège le texte pour qu'il puisse être ajouté sans risque dans une requête SPARQL.
 function escapeSparqlLiteral(value: string): string {
 	return value
 		.replace(/\\/g, "\\\\")
@@ -46,10 +56,12 @@ function escapeSparqlLiteral(value: string): string {
 		.replace(/\n/g, "\\n");
 }
 
+// Récupère le numéro ChEBI dans l'adresse d'une molécule.
 function chebiIdFromUri(uri: string): string | null {
 	return uri.match(/CHEBI[_:](\d+)/i)?.[1] ?? null;
 }
 
+// Sépare le nom de la molécule et son numéro ChEBI s'ils sont présents.
 function getSearchTerms(searchTerm: string): { label: string; identifier: string | undefined } {
 	const normalizedTerm = searchTerm.trim();
 	const label = normalizedTerm
@@ -59,6 +71,7 @@ function getSearchTerms(searchTerm: string): { label: string; identifier: string
 	return { label, identifier };
 }
 
+// Prépare une requête pour trouver une correspondance exacte.
 function buildExactQuery(searchTerm: string): string {
 	const { label, identifier } = getSearchTerms(searchTerm);
 	const filter = identifier
@@ -74,6 +87,7 @@ SELECT DISTINCT ?entity ?label WHERE {
 LIMIT 100`;
 }
 
+// Prépare une requête pour trouver les molécules liées à une molécule donnée.
 function buildDescendantsQuery(rootIds: string[]): string {
 	const roots = rootIds
 		.map((id) => `<http://purl.obolibrary.org/obo/CHEBI_${id}>`)
@@ -89,6 +103,7 @@ SELECT DISTINCT ?entity ?label WHERE {
 LIMIT 1000`;
 }
 
+// Prépare une recherche plus large si aucun résultat exact n'est trouvé.
 function buildPartialQuery(searchTerm: string): string {
 	const { label, identifier } = getSearchTerms(searchTerm);
 	const escapedTerm = escapeSparqlLiteral(label.toLowerCase());
@@ -105,6 +120,7 @@ SELECT DISTINCT ?entity ?label WHERE {
 LIMIT 50`;
 }
 
+// Prépare la requête utilisée pour proposer des noms pendant la saisie.
 function buildSuggestionQuery(searchTerm: string): string {
 	const normalizedTerm = searchTerm.trim().toLowerCase();
 	const partialId = normalizedTerm.match(/^(?:chebi\s*[:_]\s*)?(\d+)$/)?.[1];
@@ -124,6 +140,7 @@ ORDER BY ${order}
 LIMIT 50`;
 }
 
+// Transforme les lignes reçues en une liste de molécules sans doublons.
 function getMolecules(rows: SparqlRow[]): MoleculeResult[] {
 	const molecules = new Map<string, MoleculeResult>();
 
@@ -138,6 +155,7 @@ function getMolecules(rows: SparqlRow[]): MoleculeResult[] {
 	return [...molecules.values()];
 }
 
+// Cache les suggestions et efface la sélection actuelle.
 function closeSuggestions(): void {
 	suggestionList.hidden = true;
 	suggestionList.replaceChildren();
@@ -146,6 +164,7 @@ function closeSuggestions(): void {
 	activeSuggestionIndex = -1;
 }
 
+// Met en évidence une suggestion choisie avec les touches du clavier.
 function setActiveSuggestion(index: number): void {
 	const options = Array.from(suggestionList.querySelectorAll<HTMLElement>("[role='option']"));
 	if (options.length === 0) return;
@@ -158,12 +177,14 @@ function setActiveSuggestion(index: number): void {
 	searchInput.setAttribute("aria-activedescendant", options[activeSuggestionIndex].id);
 }
 
+// Remplit le champ de recherche avec la suggestion choisie.
 function chooseSuggestion(molecule: MoleculeResult): void {
 	searchInput.value = `${molecule.label} (CHEBI:${molecule.id})`;
 	closeSuggestions();
 	searchInput.focus();
 }
 
+// Permet de parcourir et de choisir les suggestions avec le clavier.
 input.addEventListener("keydown", (event) => {
 	const options = suggestionList.querySelectorAll<HTMLElement>("[role='option']");
 	if (event.key === "ArrowDown" && options.length > 0) {
@@ -181,8 +202,10 @@ input.addEventListener("keydown", (event) => {
 	}
 });
 
+// Empêche le clic sur une suggestion de faire perdre le focus au champ.
 suggestions.addEventListener("pointerdown", (event) => event.preventDefault());
 
+// Cherche et affiche des suggestions quand l'utilisateur écrit.
 input.addEventListener("input", () => {
 	if (suggestionTimer) clearTimeout(suggestionTimer);
 	closeSuggestions();
@@ -235,6 +258,7 @@ input.addEventListener("input", () => {
 	}, 300);
 });
 
+// Affiche un message dans la zone des résultats.
 function showMessage(message: string, className = "results-message"): void {
 	resultPanel.replaceChildren();
 	const paragraph = document.createElement("p");
@@ -243,6 +267,7 @@ function showMessage(message: string, className = "results-message"): void {
 	resultPanel.append(paragraph);
 }
 
+// Affiche la liste des molécules trouvées, ou un message si la liste est vide.
 function renderResults(molecules: MoleculeResult[]): void {
 	resultPanel.replaceChildren();
 	if (molecules.length === 0) {
@@ -276,6 +301,7 @@ function renderResults(molecules: MoleculeResult[]): void {
 	}
 }
 
+// Lance la recherche quand le formulaire est envoyé.
 form.addEventListener("submit", async (event) => {
 	event.preventDefault();
 	closeSuggestions();
